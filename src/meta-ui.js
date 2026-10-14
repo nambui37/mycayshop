@@ -8,7 +8,7 @@ import { formatMoney, TEA_COST, RIDE_FEE, STAFF, UPGRADES } from './game.js';
 import { mascot } from './art/people.js';
 
 export const TERMS_VERSION = 1, TERMS_DATE = '01/10/2026';
-export const PROJECT_URL = 'https://github.com/buicongnguyen/game-shop';
+export const PROJECT_URL = 'https://github.com/nambui37/mycayshop';
 const TERMS_TITLE = 'Điều khoản chơi game', DECLINE_TITLE = 'Tiệm sẽ chờ bạn';
 const freezeRows = rows => Object.freeze(rows.map(row => Object.freeze(row)));
 

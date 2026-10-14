@@ -58,7 +58,7 @@ test('terms: version 1 of 01/10/2026 with about ten numbered sections and the pr
   assert.match(html, /^<p class="meta-updated">Cập nhật ngày 01\/10\/2026 · phiên bản 1<\/p>/);
   assert.match(html, /<ol class="meta-terms">/);
   assert.equal((html.match(/<li>/g) || []).length, M.TERMS.length);
-  assert.match(html, /<a href="https:\/\/github\.com\/buicongnguyen\/game-shop" target="_blank" rel="noopener noreferrer">github\.com\/<wbr>buicongnguyen\/<wbr>game-shop<\/a>/);
+  assert.match(html, /<a href="https:\/\/github\.com\/nambui37\/mycayshop" target="_blank" rel="noopener noreferrer">github\.com\/<wbr>nambui37\/<wbr>mycayshop<\/a>/);
 });
 
 test('terms cover every promised point', () => {
