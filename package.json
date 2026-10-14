@@ -12,7 +12,8 @@
     "test:pages": "node tools/run-pages.mjs",
     "test:audit": "node tools/run-browser.mjs",
     "test:simulation": "node tests/simulation.mjs",
-    "build": "node tools/build.mjs"
+    "build": "node tools/build.mjs",
+    "deploy": "node tools/deploy.mjs"
   },
   "devDependencies": { "playwright": "1.61.1" }
 }
