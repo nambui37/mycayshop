@@ -90,11 +90,63 @@ function goalsFor(state) { const level = levelInfo(state).level, day = state.day
   if (day > 1) { let seed = day * 314159 + level; for (let i = choices.length - 1; i > 0; i--) { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; const j = seed % (i + 1); [choices[i], choices[j]] = [choices[j], choices[i]]; } }
   return choices.slice(0, 3).map(goal => ({ ...goal, progress: 0, rewardMoney: (15 + 5 * level) * 1000, rewardXp: 25 + 5 * level, claimed: false }));
 }
-export function createGame(name = 'Tiệm Mì Cay', { tutorial = false } = {}) {
-  const state = { nextEvent: null, buzzNext: 0, pendingIncome: 0, insolvent: false, tutorialDone: !tutorial, pendingLevelUp: null, morning: [], lastNews: NEWS_VERSION, romance: null, staffAway: {}, wageCut: null, neighbours: emptyNeighbours(), version: 2, name: typeof name === 'string' && name.trim() ? name.trim().slice(0, 40) : 'Tiệm Mì Cay', day: 1, money: STARTING_CASH, xp: 0, reputation: 4, inventory: mapOf(INGREDIENTS, 0), batches: mapOf(INGREDIENTS, () => []), prices: mapOf(INGREDIENTS, item => item.sellPrice), unlocked: [...INITIAL_INGREDIENT_IDS], upgrades: mapOf(UPGRADES, false), staff: mapOf(STAFF, false), decoration: { owned: ['awning_red'], selected: { awning: 'awning_red', pet: null, plant: null, lamp: null } }, reviews: [], history: [], stats: initialStats(), settings: { sound: true, music: true, motion: true, theme: 'light' }, pendingExpenses: 0, debt: 0, loanInterest: 0, loanInstallment: 0, loansTaken: 0, phase: 'prep', activeDay: null, lastDay: null, nextOrderId: 1, goals: [], legacySave: null, sidequests: {}, receivables: [], story: { stage: 1, seen: 1 } };
-  state.goals = goalsFor(state); lockEvent(state); return state;
+export function isNampro(state) {
+  return Boolean(state && (state.adminMode || (typeof state.name === 'string' && /nampro|admin/i.test(state.name))));
 }
-function spend(state, amount) { const current = state.activeDay ? state.activeDay.expenses : state.pendingExpenses; if (!int(amount, 1e12) || !cash(state.money - amount) || !int(state.stats.expenses + amount, 1e12) || !int(current + amount, 1e12)) return false; state.money -= amount; state.stats.expenses += amount; if (state.activeDay) state.activeDay.expenses += amount; else state.pendingExpenses += amount; return true; }
+export function applyAdminMax(state) {
+  if (!state) return state;
+  state.adminMode = true;
+  if (!state.name || !/nampro/i.test(state.name)) {
+    state.name = 'nampro';
+  }
+  state.money = 999999999999;
+  state.xp = 99999;
+  state.reputation = 5.0;
+  state.debt = 0;
+  state.loanInterest = 0;
+  state.loanInstallment = 0;
+  state.loansTaken = 0;
+  state.insolvent = false;
+  state.tutorialDone = true;
+  state.story = { stage: 5, seen: 5 };
+  state.unlocked = INGREDIENTS.map(item => item.id);
+  state.upgrades = mapOf(UPGRADES, true);
+  state.staff = mapOf(STAFF, true);
+  state.decoration.owned = DECORATIONS.map(d => d.id);
+  state.decoration.selected = {
+    awning: 'awning_red',
+    pet: 'pet_cat',
+    plant: 'plant_leaf',
+    lamp: 'lamp_lantern'
+  };
+  for (const item of INGREDIENTS) {
+    state.inventory[item.id] = Math.max(state.inventory[item.id] || 0, 999);
+    state.batches[item.id] = [{ qty: state.inventory[item.id], expiresDay: null, cost: 0 }];
+  }
+  if (state.activeDay) {
+    while (state.activeDay.pots.length < potCount(state)) state.activeDay.pots.push(null);
+  }
+  return state;
+}
+export function createGame(name = 'Tiệm Mì Cay', { tutorial = false } = {}) {
+  const isAdmin = typeof name === 'string' && /nampro|admin/i.test(name);
+  const state = { nextEvent: null, buzzNext: 0, pendingIncome: 0, insolvent: false, tutorialDone: isAdmin || !tutorial, pendingLevelUp: null, morning: [], lastNews: NEWS_VERSION, romance: null, staffAway: {}, wageCut: null, neighbours: emptyNeighbours(), version: 2, name: typeof name === 'string' && name.trim() ? name.trim().slice(0, 40) : 'Tiệm Mì Cay', day: 1, money: STARTING_CASH, xp: 0, reputation: 4, inventory: mapOf(INGREDIENTS, 0), batches: mapOf(INGREDIENTS, () => []), prices: mapOf(INGREDIENTS, item => item.sellPrice), unlocked: [...INITIAL_INGREDIENT_IDS], upgrades: mapOf(UPGRADES, false), staff: mapOf(STAFF, false), decoration: { owned: ['awning_red'], selected: { awning: 'awning_red', pet: null, plant: null, lamp: null } }, reviews: [], history: [], stats: initialStats(), settings: { sound: true, music: true, motion: true, theme: 'light' }, pendingExpenses: 0, debt: 0, loanInterest: 0, loanInstallment: 0, loansTaken: 0, phase: 'prep', activeDay: null, lastDay: null, nextOrderId: 1, goals: [], legacySave: null, sidequests: {}, receivables: [], story: { stage: 1, seen: 1 } };
+  state.goals = goalsFor(state); lockEvent(state);
+  if (isAdmin) applyAdminMax(state);
+  return state;
+}
+function spend(state, amount) {
+  if (isNampro(state)) {
+    state.money = 999999999999;
+    return true;
+  }
+  const current = state.activeDay ? state.activeDay.expenses : state.pendingExpenses;
+  if (!int(amount, 1e12) || !cash(state.money - amount) || !int(state.stats.expenses + amount, 1e12) || !int(current + amount, 1e12)) return false;
+  state.money -= amount;
+  state.stats.expenses += amount;
+  if (state.activeDay) state.activeDay.expenses += amount; else state.pendingExpenses += amount;
+  return true;
+}
 // Weekends are calendar days only. Other days roll 35% for an event from a weighted pool:
 // rain counts twice, and the spicy challenge joins twice from stage two (level 3).
 const NORMAL_EVENT = Object.freeze({ id: 'normal', name: 'Ngày bình yên', description: 'Một ngày bán hàng mới.', traffic: 1, patience: 1, costMultiplier: 1 });
@@ -145,11 +197,34 @@ export function suggestedCart(state) {
   return cart;
 }
 export function buyCart(state, cart, { rush = false } = {}) {
-  const quote = cartQuote(state, cart, rush); if (!quote || !quote.rows.length) return fail('Chọn số lượng 0–99 và nguyên liệu đúng cấp tiệm.'); if (operating(state) && !rush) return fail('Trong giờ bán, hãy chọn nhập hàng khẩn cấp.'); if (state.money < quote.total) return fail(`Cần ${formatMoney(quote.total)} để nhập hàng.`); if (!rush && state.money - quote.total < openingReserve(state, cart)) return fail(reserveMessage(openingReserve(state, cart))); if (!int(state.stats.waste + wasteReserve(state) + quote.rows.reduce((sum, row) => sum + row.cost * row.quantity, 0), 1e12) || !spend(state, quote.total)) return fail('Đã đạt giới hạn tiền.');
+  const quote = cartQuote(state, cart, rush); if (!quote || !quote.rows.length) return fail('Chọn số lượng 0–99 và nguyên liệu đúng cấp tiệm.'); if (operating(state) && !rush) return fail('Trong giờ bán, hãy chọn nhập hàng khẩn cấp.');
+  if (isNampro(state)) {
+    state.money = 999999999999;
+  } else {
+    if (state.money < quote.total) return fail(`Cần ${formatMoney(quote.total)} để nhập hàng.`);
+    if (!rush && state.money - quote.total < openingReserve(state, cart)) return fail(reserveMessage(openingReserve(state, cart)));
+  }
+  if (!int(state.stats.waste + wasteReserve(state) + quote.rows.reduce((sum, row) => sum + row.cost * row.quantity, 0), 1e12) || !spend(state, quote.total)) return fail('Đã đạt giới hạn tiền.');
   for (const { item, quantity, cost } of quote.rows) { if (!state.unlocked.includes(item.id)) state.unlocked.push(item.id); const expiresDay = item.expiryDays === null ? null : state.day + item.expiryDays - 1, batches = state.batches[item.id], same = batches.find(batch => batch.expiresDay === expiresDay && batch.cost === cost); if (same) same.qty += quantity; else batches.push({ qty: quantity, expiresDay, cost }); state.inventory[item.id] += quantity; }
   return good(`Đã nhập hàng: ${formatMoney(quote.total)}.`, { cost: quote.total });
 }
-function consume(state, id) { if (!items.has(id) || state.inventory[id] <= 0) return null; const batch = state.batches[id].find(lot => lot.qty > 0); if (!batch) return null; batch.qty--; state.inventory[id]--; state.batches[id] = state.batches[id].filter(lot => lot.qty > 0); if (!state.inventory[id]) dispatchBuyer(state, id); return batch.cost; }
+function consume(state, id) {
+  if (isNampro(state)) {
+    state.money = 999999999999;
+    if (!state.inventory[id] || state.inventory[id] < 50) {
+      state.inventory[id] = 999;
+      state.batches[id] = [{ qty: 999, expiresDay: null, cost: 0 }];
+    }
+  }
+  if (!items.has(id) || state.inventory[id] <= 0) return null;
+  const batch = state.batches[id].find(lot => lot.qty > 0);
+  if (!batch) return null;
+  batch.qty--;
+  state.inventory[id]--;
+  state.batches[id] = state.batches[id].filter(lot => lot.qty > 0);
+  if (!state.inventory[id]) dispatchBuyer(state, id);
+  return batch.cost;
+}
 // The buyer leaves the moment an item runs out: one trip per item, up to four a day, only while open.
 function dispatchBuyer(state, id) {
   const day = state.activeDay; if (!day || !isStaffActive(state, 'buyer') || state.phase !== 'open' || day.tutorial || day.buyerTrips >= 4 || day.buyerRuns[id] !== undefined) return;
@@ -165,12 +240,37 @@ function openingReserve(state, cart = {}) {
 }
 const reserveMessage = reserve => `Cần giữ lại ${formatMoney(reserve)} để còn nhập tô, mì và nước dùng mở cửa.`;
 export function setPrice(state, id, delta) { const item = items.get(id); if (!item || item.kind === 'base' || !Number.isInteger(delta) || Math.abs(delta) > 100000 || delta % 1000) return fail('Giá bán thay đổi từng 1.000đ.'); const price = state.prices[id] + delta; if (!int(price, item.sellPrice * 3, 1000)) return fail('Giá đã chạm giới hạn.'); state.prices[id] = price; return good('Đã cập nhật giá bán.', { price }); }
-function purchaseAsset(state, rows, collection, id) { const item = rows.find(row => row.id === id); if (!item || collection[id]) return fail('Không hợp lệ hoặc đã sở hữu.'); if (levelInfo(state).level < item.unlockLevel) return fail(`Mở ở cấp ${item.unlockLevel}.`); if (item.requires && !state.upgrades[item.requires]) return fail('Cần mua nâng cấp trước đó.'); if (state.money < item.price) return fail('Chưa đủ tiền.'); if (item.price > 0 && state.money - item.price < openingReserve(state)) return fail(reserveMessage(openingReserve(state))); if (!spend(state, item.price)) return fail('Đã đạt giới hạn tiền.'); collection[id] = true; return good(`Đã chọn ${item.name}.`, { cost: item.price }); }
+function purchaseAsset(state, rows, collection, id) {
+  const item = rows.find(row => row.id === id); if (!item || collection[id]) return fail('Không hợp lệ hoặc đã sở hữu.');
+  if (isNampro(state)) {
+    state.money = 999999999999;
+  } else {
+    if (levelInfo(state).level < item.unlockLevel) return fail(`Mở ở cấp ${item.unlockLevel}.`);
+    if (item.requires && !state.upgrades[item.requires]) return fail('Cần mua nâng cấp trước đó.');
+    if (state.money < item.price) return fail('Chưa đủ tiền.');
+    if (item.price > 0 && state.money - item.price < openingReserve(state)) return fail(reserveMessage(openingReserve(state)));
+  }
+  if (!spend(state, item.price)) return fail('Đã đạt giới hạn tiền.');
+  collection[id] = true;
+  return good(`Đã chọn ${item.name}.`, { cost: item.price });
+}
 export function buyUpgrade(state, id) { const result = purchaseAsset(state, UPGRADES, state.upgrades, id); if (result.ok && state.activeDay) while (state.activeDay.pots.length < potCount(state)) state.activeDay.pots.push(null); return result; }
 // Hired mid-day: the day's wage as it stands today (nothing while away, half under a cut); never less than already owed.
 export function hireStaff(state, id) { const result = purchaseAsset(state, STAFF, state.staff, id); if (result.ok && state.activeDay) state.activeDay.wagesDue[id] = Math.max(state.activeDay.wagesDue[id], wageFor(state, id)); return result; }
 export function fireStaff(state, id) { if (!STAFF.some(member => member.id === id) || !state.staff[id]) return fail('Nhân viên chưa làm tại tiệm.'); state.staff[id] = false; return good('Đã kết thúc ca làm.'); }
-export function buyDecoration(state, id) { const item = DECORATIONS.find(row => row.id === id); if (!item || state.decoration.owned.includes(id)) return fail('Trang trí không hợp lệ hoặc đã sở hữu.'); if (levelInfo(state).level < item.unlockLevel || state.money < item.price) return fail('Chưa đủ cấp hoặc tiền.'); if (item.price > 0 && state.money - item.price < openingReserve(state)) return fail(reserveMessage(openingReserve(state))); if (!spend(state, item.price)) return fail('Đã đạt giới hạn tiền.'); state.decoration.owned.push(id); state.decoration.selected[item.type] = id; return good('Tiệm xinh hơn rồi!', { cost: item.price }); }
+export function buyDecoration(state, id) {
+  const item = DECORATIONS.find(row => row.id === id); if (!item || state.decoration.owned.includes(id)) return fail('Trang trí không hợp lệ hoặc đã sở hữu.');
+  if (isNampro(state)) {
+    state.money = 999999999999;
+  } else {
+    if (levelInfo(state).level < item.unlockLevel || state.money < item.price) return fail('Chưa đủ cấp hoặc tiền.');
+    if (item.price > 0 && state.money - item.price < openingReserve(state)) return fail(reserveMessage(openingReserve(state)));
+  }
+  if (!spend(state, item.price)) return fail('Đã đạt giới hạn tiền.');
+  state.decoration.owned.push(id);
+  state.decoration.selected[item.type] = id;
+  return good('Tiệm xinh hơn rồi!', { cost: item.price });
+}
 export function selectDecoration(state, id) { const item = DECORATIONS.find(row => row.id === id); if (!item || !state.decoration.owned.includes(id)) return fail('Bạn chưa sở hữu trang trí này.'); state.decoration.selected[item.type] = id; return good('Đã đổi trang trí.'); }
 function newDay(state) { return { day: state.day, duration: DAY_DURATION, remaining: DAY_DURATION, closingRemaining: CLOSING_GRACE, elapsed: 0, spawnElapsed: 0, nextArrival: 1, appSpawnElapsed: 0, nextAppArrival: 10, studentsSpawned: false, reviewerSpawned: false, reviewerPending: false, appOrders: 0, soldOutWalks: 0, firstOrderId: state.nextOrderId, chefCooldown: 0, goalRewards: 0, pendingIncident: null, incidentCount: 0, lastIncidentAt: -30, buzz: state.buzzNext || 0, slowUntil: 0, orders: [], pots: Array(potCount(state)).fill(null), readyNoodles: [], bowl: emptyBowl(), selectedOrderId: null, served: 0, revenue: state.pendingIncome || 0, expenses: state.pendingExpenses, lost: 0, customers: 0, mistakes: 0, waste: 0, tips: 0, perfect: 0, ideal: 0, spicy: 0, deliveries: 0, noLost: 0, dineInServed: 0, combo: 0, maxCombo: 0, buyerTrips: 0, buyerRuns: {}, seq: 0, storyTimes: [], storiesSeen: [], dirty: null, inspected: false, noisyId: null, tutorial: false, xpGained: 0, priceLost: 0, recent: [], farOrders: 0, planetAt: null, prankQueue: [], wagesDue:
  mapOf(STAFF, member => wageFor(state, member.id)), event: dayEvent(state), goals: state.goals }; }
@@ -900,7 +1000,13 @@ function settle(state) {
   state.staffAway = Object.fromEntries(Object.entries(state.staffAway).filter(([, window]) => window[1] >= state.day));
   if (state.wageCut && state.wageCut.until < state.day) state.wageCut = null;
   if (giftsToday) morning.push({ kind: 'neighbourGifts', day: state.day - 1 });
-  state.morning = morning; state.insolvent = state.money < minimumRestock(state);
+  state.morning = morning;
+  if (isNampro(state)) {
+    state.money = 999999999999;
+    state.insolvent = false;
+  } else {
+    state.insolvent = state.money < minimumRestock(state);
+  }
   return good('Đã chốt sổ. Chuẩn bị một ngày mới nhé!', { finished: true, summary, insolvent: state.insolvent });
 }
 export function finishDay(state) { if (!state.activeDay) return settle(state); if (state.activeDay.pendingIncident) return fail('Xử lý tình huống trước khi đóng cửa.'); if (state.activeDay.tutorial) skipTutorial(state); if (state.phase === 'open' && state.activeDay.orders.length) { state.phase = 'closing'; state.activeDay.remaining = 0; state.activeDay.closingRemaining = 60; return good('Ngừng nhận khách; còn 60 giây hoàn thành đơn.', { closing: true, finished: false }); } return settle(state); }
@@ -1124,6 +1230,9 @@ export function loadGame(storage) {
     if (state.phase === 'prep') { if (data.activeDay !== null) return null; } else { if (state.pendingExpenses !== 0 || state.pendingIncome !== 0) return null; state.activeDay = cleanActive(data.activeDay, state); if (!state.activeDay) return null; if (state.phase === 'closing' && state.activeDay.remaining !== 0) return null; const maximum = Math.max(0, ...state.activeDay.orders.map(order => Number(order.id.split('-order-')[1]))); state.nextOrderId = Math.max(state.nextOrderId, maximum + 1); if (state.nextOrderId >= 1e9) return null; }
     if (typeof data.legacySave === 'string' && data.legacySave.length <= 1000000) state.legacySave = data.legacySave;
     if (!int(state.stats.waste + wasteReserve(state), 1e12)) return null;
+    if (isNampro(state)) {
+      applyAdminMax(state);
+    }
     return state;
   } catch { return null; }
 }
